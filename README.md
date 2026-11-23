@@ -83,6 +83,18 @@ export function DevOverlay() {
 
 ---
 
+## Live Full-Stack Playground
+
+Run the zero-Docker SQLite + React 19 + WebAssembly playground in [`demo/`](./demo) to trigger live N+1 query bursts, compare batched fixes, emit `reylo:query` `diagnostics_channel` telemetry, and inspect interactive `EXPLAIN` flow graphs:
+
+```sh
+git clone https://github.com/culpritsql/culprit-devtools.git
+cd culprit-devtools && bun install && bun run demo
+# Open http://127.0.0.1:4321
+```
+
+---
+
 ## Framework & Driver Integrations
 
 ### Reylo (`diagnostics_channel`)
