@@ -1,0 +1,81 @@
+{
+  "name": "@culpritsql/devtools",
+  "version": "0.5.6",
+  "description": "In-app SQL DevTools HUD, N+1 burst detector, and interactive EXPLAIN plan inspector for React and Node.js.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": [
+    "*.css"
+  ],
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.js"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc -p tsconfig.check.json",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@culpritsql/plan-viewer": "^0.5.6",
+    "@culpritsql/plans": "^0.5.6",
+    "lucide-react": "^1.16.0"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "esbuild": "^0.25.4",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "typescript": "^5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/culpritsql/culprit-devtools.git"
+  },
+  "homepage": "https://explain.culpritsql.com",
+  "bugs": {
+    "url": "https://github.com/culpritsql/culprit-devtools/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "keywords": [
+    "sql",
+    "devtools",
+    "react",
+    "n-plus-one",
+    "explain",
+    "query-plan",
+    "execution-plan",
+    "postgres",
+    "postgresql",
+    "mysql",
+    "sqlite",
+    "mssql",
+    "reylo",
+    "prisma",
+    "drizzle",
+    "diagnostics-channel"
+  ]
+}

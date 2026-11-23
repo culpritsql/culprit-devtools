@@ -1,0 +1,684 @@
+/* @culpritsql/devtools scoped stylesheet.
+ * Layers cleanly with @culpritsql/plan-viewer/styles.css and scopes every rule
+ * under `.culprit-dt` so host `html`, `body`, and `<button>` styles are untouched. */
+@import "@culpritsql/plan-viewer/styles.css";
+
+:where(.culprit-dt) {
+  --dt-font: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", "Inter", system-ui, sans-serif;
+  --dt-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+
+  /* Light palette */
+  --dt-bg: #fafaf9;
+  --dt-surface: #ffffff;
+  --dt-raised: #f4f4f2;
+  --dt-sunken: #f0efec;
+  --dt-border: #e5e4df;
+  --dt-border-strong: #d2d0c9;
+  --dt-text: #181715;
+  --dt-text-2: #5c5a55;
+  --dt-text-3: #78756e;
+  --dt-brand: #ffcf33;
+  --dt-brand-ink: #181715;
+  --dt-good: #2f9e66;
+  --dt-good-bg: #e7f5ee;
+  --dt-amber: #d4820a;
+  --dt-amber-bg: #fdf3e1;
+  --dt-coral: #d94349;
+  --dt-coral-bg: #fdeceb;
+  --dt-route: #2c62d6;
+  --dt-route-bg: #ebf1fc;
+  --dt-shadow-pill: 0 4px 16px rgba(24, 23, 21, 0.14), 0 1px 3px rgba(24, 23, 21, 0.08);
+  --dt-shadow-drawer: 0 18px 48px rgba(24, 23, 21, 0.22), 0 2px 8px rgba(24, 23, 21, 0.1);
+
+  --dt-sql-kw: #7c3aed;
+  --dt-sql-str: #1f7a4c;
+  --dt-sql-num: #b85614;
+  --dt-sql-cmt: #78756e;
+  --dt-sql-prm: #2563eb;
+
+  font-family: var(--dt-font);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--dt-text);
+  box-sizing: border-box;
+  z-index: 2147483000;
+}
+
+@media (prefers-color-scheme: dark) {
+  :where(.culprit-dt:not([data-theme="light"])) {
+    --dt-bg: #121211;
+    --dt-surface: #181816;
+    --dt-raised: #20201d;
+    --dt-sunken: #141413;
+    --dt-border: #2a2a26;
+    --dt-border-strong: #3a3934;
+    --dt-text: #ecebe7;
+    --dt-text-2: #a5a39c;
+    --dt-text-3: #838079;
+    --dt-good: #4cbb84;
+    --dt-good-bg: rgba(76, 187, 132, 0.15);
+    --dt-amber: #f0a740;
+    --dt-amber-bg: rgba(240, 167, 64, 0.16);
+    --dt-coral: #f0676b;
+    --dt-coral-bg: rgba(240, 103, 107, 0.16);
+    --dt-route: #7aa6f8;
+    --dt-route-bg: rgba(122, 166, 248, 0.15);
+    --dt-shadow-pill: 0 6px 20px rgba(0, 0, 0, 0.48), 0 1px 3px rgba(0, 0, 0, 0.4);
+    --dt-shadow-drawer: 0 24px 64px rgba(0, 0, 0, 0.65), 0 2px 10px rgba(0, 0, 0, 0.45);
+
+    --dt-sql-kw: #c792ea;
+    --dt-sql-str: #8fd19e;
+    --dt-sql-num: #f2a66c;
+    --dt-sql-cmt: #8a8781;
+    --dt-sql-prm: #82aaff;
+  }
+}
+
+:where(.culprit-dt[data-theme="dark"]) {
+  --dt-bg: #121211;
+  --dt-surface: #181816;
+  --dt-raised: #20201d;
+  --dt-sunken: #141413;
+  --dt-border: #2a2a26;
+  --dt-border-strong: #3a3934;
+  --dt-text: #ecebe7;
+  --dt-text-2: #a5a39c;
+  --dt-text-3: #838079;
+  --dt-good: #4cbb84;
+  --dt-good-bg: rgba(76, 187, 132, 0.15);
+  --dt-amber: #f0a740;
+  --dt-amber-bg: rgba(240, 167, 64, 0.16);
+  --dt-coral: #f0676b;
+  --dt-coral-bg: rgba(240, 103, 107, 0.16);
+  --dt-route: #7aa6f8;
+  --dt-route-bg: rgba(122, 166, 248, 0.15);
+  --dt-shadow-pill: 0 6px 20px rgba(0, 0, 0, 0.48), 0 1px 3px rgba(0, 0, 0, 0.4);
+  --dt-shadow-drawer: 0 24px 64px rgba(0, 0, 0, 0.65), 0 2px 10px rgba(0, 0, 0, 0.45);
+
+  --dt-sql-kw: #c792ea;
+  --dt-sql-str: #8fd19e;
+  --dt-sql-num: #f2a66c;
+  --dt-sql-cmt: #8a8781;
+  --dt-sql-prm: #82aaff;
+}
+
+:where(.culprit-dt) *,
+:where(.culprit-dt) *::before,
+:where(.culprit-dt) *::after {
+  box-sizing: border-box;
+}
+
+/* Floating trigger pill */
+.culprit-dt-pill {
+  position: fixed;
+  z-index: 2147483001;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 13px;
+  border-radius: 999px;
+  border: 1px solid var(--dt-border-strong);
+  background: var(--dt-surface);
+  color: var(--dt-text);
+  box-shadow: var(--dt-shadow-pill);
+  font: 600 12px/1 var(--dt-mono);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: transform 140ms ease, border-color 140ms ease;
+}
+
+.culprit-dt-pill:hover {
+  transform: translateY(-1px);
+  border-color: var(--dt-brand);
+}
+
+.culprit-dt-tone-coral {
+  border-color: var(--dt-coral);
+}
+
+.culprit-dt-tone-amber {
+  border-color: var(--dt-amber);
+}
+
+.culprit-dt-pos-bottom-right .culprit-dt-pill {
+  right: 16px;
+  bottom: 16px;
+}
+
+.culprit-dt-pos-bottom-left .culprit-dt-pill {
+  left: 16px;
+  bottom: 16px;
+}
+
+.culprit-dt-pos-top-right .culprit-dt-pill {
+  right: 16px;
+  top: 16px;
+}
+
+.culprit-dt-pos-top-left .culprit-dt-pill {
+  left: 16px;
+  top: 16px;
+}
+
+.culprit-dt-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.culprit-dt-dot-good {
+  background: var(--dt-good);
+  box-shadow: 0 0 0 3px var(--dt-good-bg);
+}
+
+.culprit-dt-dot-amber {
+  background: var(--dt-amber);
+  box-shadow: 0 0 0 3px var(--dt-amber-bg);
+}
+
+.culprit-dt-dot-coral {
+  background: var(--dt-coral);
+  box-shadow: 0 0 0 3px var(--dt-coral-bg);
+}
+
+/* Docked drawer */
+.culprit-dt-drawer {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: 58px;
+  height: min(520px, calc(100vh - 82px));
+  z-index: 2147483000;
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  border: 1px solid var(--dt-border-strong);
+  background: var(--dt-bg);
+  color: var(--dt-text);
+  box-shadow: var(--dt-shadow-drawer);
+  overflow: hidden;
+}
+
+.culprit-dt-pos-top-right .culprit-dt-drawer,
+.culprit-dt-pos-top-left .culprit-dt-drawer {
+  top: 58px;
+  bottom: auto;
+}
+
+.culprit-dt-drawer-expanded {
+  height: calc(100vh - 78px);
+}
+
+.culprit-dt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--dt-surface);
+  border-bottom: 1px solid var(--dt-border);
+  flex-wrap: wrap;
+}
+
+.culprit-dt-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.culprit-dt-brand-mark {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--dt-brand);
+  color: var(--dt-brand-ink);
+  display: inline-grid;
+  place-items: center;
+}
+
+.culprit-dt-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.culprit-dt-summary {
+  font: 500 11.5px/1 var(--dt-mono);
+  color: var(--dt-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.culprit-dt-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--dt-sunken);
+  border: 1px solid var(--dt-border);
+}
+
+.culprit-dt-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dt-text-2);
+  font: 600 12px/1 var(--dt-font);
+  cursor: pointer;
+}
+
+.culprit-dt-tab:hover {
+  color: var(--dt-text);
+}
+
+.culprit-dt-tab.is-active {
+  background: var(--dt-raised);
+  color: var(--dt-text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.culprit-dt-count {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--dt-surface);
+  border: 1px solid var(--dt-border);
+  font: 600 10.5px/1 var(--dt-mono);
+  color: var(--dt-text-2);
+}
+
+.culprit-dt-count.is-coral {
+  background: var(--dt-coral-bg);
+  border-color: transparent;
+  color: var(--dt-coral);
+}
+
+.culprit-dt-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.culprit-dt-icon-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--dt-text-2);
+  cursor: pointer;
+}
+
+.culprit-dt-icon-btn:hover {
+  background: var(--dt-raised);
+  border-color: var(--dt-border);
+  color: var(--dt-text);
+}
+
+/* Panels & filter sub-toolbar */
+.culprit-dt-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.culprit-dt-subbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--dt-sunken);
+  border-bottom: 1px solid var(--dt-border);
+  flex-wrap: wrap;
+}
+
+.culprit-dt-filters {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.culprit-dt-chip {
+  padding: 4px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--dt-border);
+  background: var(--dt-surface);
+  color: var(--dt-text-2);
+  font: 600 11.5px/1.2 var(--dt-font);
+  cursor: pointer;
+}
+
+.culprit-dt-chip:hover {
+  color: var(--dt-text);
+  border-color: var(--dt-border-strong);
+}
+
+.culprit-dt-chip.is-active {
+  background: var(--dt-brand);
+  border-color: var(--dt-brand);
+  color: var(--dt-brand-ink);
+}
+
+.culprit-dt-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  min-width: 220px;
+  border-radius: 6px;
+  border: 1px solid var(--dt-border);
+  background: var(--dt-surface);
+  color: var(--dt-text-3);
+}
+
+.culprit-dt-search input {
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--dt-text);
+  font: 400 12px/1.3 var(--dt-font);
+  width: 100%;
+}
+
+/* Query & Burst Lists */
+.culprit-dt-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.culprit-dt-query-row,
+.culprit-dt-burst-card {
+  border: 1px solid var(--dt-border);
+  border-radius: 8px;
+  background: var(--dt-surface);
+  padding: 9px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.culprit-dt-burst-card {
+  border-left: 3px solid var(--dt-coral);
+}
+
+.culprit-dt-query-meta,
+.culprit-dt-burst-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.culprit-dt-duration-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 148px;
+}
+
+.culprit-dt-duration {
+  font: 600 11.5px/1 var(--dt-mono);
+  font-variant-numeric: tabular-nums;
+  min-width: 62px;
+}
+
+.culprit-dt-duration.is-good {
+  color: var(--dt-good);
+}
+
+.culprit-dt-duration.is-amber {
+  color: var(--dt-amber);
+}
+
+.culprit-dt-duration.is-coral {
+  color: var(--dt-coral);
+}
+
+.culprit-dt-bar-track {
+  width: 72px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--dt-raised);
+  overflow: hidden;
+}
+
+.culprit-dt-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+}
+
+.culprit-dt-bar-fill.is-good {
+  background: var(--dt-good);
+}
+
+.culprit-dt-bar-fill.is-amber {
+  background: var(--dt-amber);
+}
+
+.culprit-dt-bar-fill.is-coral {
+  background: var(--dt-coral);
+}
+
+.culprit-dt-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.culprit-dt-badge {
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: var(--dt-raised);
+  border: 1px solid var(--dt-border);
+  color: var(--dt-text-2);
+  font: 600 11px/1.3 var(--dt-mono);
+}
+
+.culprit-dt-badge.is-route {
+  background: var(--dt-route-bg);
+  border-color: transparent;
+  color: var(--dt-route);
+}
+
+.culprit-dt-badge.is-amber {
+  background: var(--dt-amber-bg);
+  border-color: transparent;
+  color: var(--dt-amber);
+}
+
+.culprit-dt-badge.is-coral {
+  background: var(--dt-coral-bg);
+  border-color: transparent;
+  color: var(--dt-coral);
+}
+
+.culprit-dt-badge.is-muted {
+  background: transparent;
+  color: var(--dt-text-3);
+}
+
+.culprit-dt-burst-mult {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--dt-coral-bg);
+  color: var(--dt-coral);
+  font: 700 12px/1 var(--dt-mono);
+}
+
+.culprit-dt-inspect-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--dt-border-strong);
+  background: var(--dt-raised);
+  color: var(--dt-text);
+  font: 600 11.5px/1.2 var(--dt-font);
+  cursor: pointer;
+}
+
+.culprit-dt-inspect-btn.has-plan {
+  border-color: var(--dt-brand);
+}
+
+.culprit-dt-inspect-btn:hover {
+  border-color: var(--dt-brand);
+}
+
+/* SQL syntax tokens for <Sql /> outside .culprit-pv */
+.culprit-dt-sql-box {
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: var(--dt-sunken);
+  border: 1px solid var(--dt-border);
+  overflow-x: auto;
+}
+
+.culprit-dt-sql-box .sql {
+  margin: 0;
+  font: 12px/1.5 var(--dt-mono);
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--dt-text);
+}
+
+.culprit-dt-sql-box .sql .k {
+  color: var(--dt-sql-kw);
+  font-weight: 600;
+}
+
+.culprit-dt-sql-box .sql .s {
+  color: var(--dt-sql-str);
+}
+
+.culprit-dt-sql-box .sql .n {
+  color: var(--dt-sql-num);
+}
+
+.culprit-dt-sql-box .sql .c {
+  color: var(--dt-sql-cmt);
+}
+
+.culprit-dt-sql-box .sql .p {
+  color: var(--dt-sql-prm);
+}
+
+.culprit-dt-advice {
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: var(--dt-amber-bg);
+  color: var(--dt-text);
+  font-size: 12px;
+}
+
+/* Plan Inspector & Quick Paste */
+.culprit-dt-select {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--dt-border-strong);
+  background: var(--dt-surface);
+  color: var(--dt-text);
+  font: 500 12px/1.3 var(--dt-font);
+  max-width: 420px;
+}
+
+.culprit-dt-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.culprit-dt-paste-box {
+  padding: 10px 12px;
+  background: var(--dt-surface);
+  border-bottom: 1px solid var(--dt-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.culprit-dt-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--dt-border-strong);
+  background: var(--dt-sunken);
+  color: var(--dt-text);
+  font: 12px/1.45 var(--dt-mono);
+  resize: vertical;
+}
+
+.culprit-dt-paste-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.culprit-dt-error-msg {
+  color: var(--dt-coral);
+  font-size: 12px;
+  flex: 1;
+}
+
+.culprit-dt-primary-btn {
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--dt-brand);
+  background: var(--dt-brand);
+  color: var(--dt-brand-ink);
+  font: 600 12px/1.2 var(--dt-font);
+  cursor: pointer;
+}
+
+.culprit-dt-primary-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.culprit-dt-viewer-stage {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 12px;
+}
+
+.culprit-dt-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px;
+  color: var(--dt-text-3);
+  text-align: center;
+}
+
+.culprit-dt-empty p {
+  margin: 0;
+  max-width: 460px;
+}
