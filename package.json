@@ -1,6 +1,6 @@
 {
   "name": "@culpritsql/devtools",
-  "version": "0.5.7",
+  "version": "0.5.8",
   "description": "In-app SQL DevTools HUD, N+1 burst detector, and interactive EXPLAIN plan inspector for React and Node.js.",
   "license": "MIT",
   "type": "module",
@@ -33,7 +33,7 @@
   },
   "dependencies": {
     "@culpritsql/plan-viewer": "^0.5.8",
-    "@culpritsql/plans": "^0.5.7",
+    "@culpritsql/plans": "^0.5.10",
     "lucide-react": "^1.16.0"
   },
   "peerDependencies": {
