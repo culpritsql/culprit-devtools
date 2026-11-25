@@ -370,6 +370,18 @@
   color: var(--dt-brand-ink);
 }
 
+.culprit-dt-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.culprit-dt-deadlock-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .culprit-dt-search {
   display: inline-flex;
   align-items: center;

@@ -1,6 +1,18 @@
-import type { Engine, Plan } from "@culpritsql/plan-viewer";
+import type {
+  Deadlock,
+  Engine,
+  ExtendedEventsBatch,
+  ExtendedEventsFormat,
+  Plan,
+} from "@culpritsql/plan-viewer";
 
-export type { Engine, Plan };
+export type {
+  Deadlock,
+  Engine,
+  ExtendedEventsBatch,
+  ExtendedEventsFormat,
+  Plan,
+};
 
 export type RecordedQuery = {
   id: string;

@@ -30,7 +30,7 @@ Powered by [`@culpritsql/plans`](https://github.com/culpritsql/culprit-plans) We
 - **Automatic N+1 burst detection**: Canonical SQL fingerprinting strips comments, literals, `$1`/`?`/`:param`, and `IN (?, ?, ...)` lists to group repeated queries per HTTP request and suggest `JOIN` or `WHERE id = ANY($1)` batching fixes.
 - **Request correlation (`AsyncLocalStorage`)**: Tags every SQL query executed inside a route handler with its HTTP route badge (`GET /api/orders`).
 - **Zero-dependency driver & `diagnostics_channel` hooks**: Native support for **Reylo** (`reylo:query`), `pg`, `mysql2`, `better-sqlite3` / `node:sqlite`, Prisma, and Drizzle.
-- **Safe auto-`EXPLAIN` + instant paste**: Runs read-only `EXPLAIN` on slow single-statement `SELECT` queries via `@culpritsql/plans` Wasm, or paste any PostgreSQL, MySQL, MariaDB, SQLite, YugabyteDB, or SQL Server `.sqlplan` output directly inside the drawer.
+- **Safe auto-`EXPLAIN` + instant `.xel` & deadlock inspector**: Runs read-only `EXPLAIN` on slow single-statement `SELECT` queries via `@culpritsql/plans` Wasm, or paste/drop any PostgreSQL, MySQL, MariaDB, SQLite, YugabyteDB, or SQL Server `.sqlplan`, deadlock graph, or binary `.xel` / Extended Events XML directly inside the drawer.
 - **Strict CSS & bundler isolation**: Scoped to `.culprit-dt` (never mutates host `body` or `<button>` styles), and Node builtins live strictly behind `@culpritsql/devtools/server`.
 
 ---
@@ -221,9 +221,9 @@ prisma.$on("query", (event) => {
 
 | Import Path | Environment | Exports |
 | --- | --- | --- |
-| `@culpritsql/devtools` | Browser / SSR / Universal | `CulpritDevtools`, `normalizeSqlForFingerprint`, `fingerprintSql`, `detectNPlusOneAdvice`, shared types |
-| `@culpritsql/devtools/react` | Browser / SSR | `CulpritDevtools` and React prop types |
-| `@culpritsql/devtools/server` | Node.js / Bun (`>=20`) | `CulpritCollector`, `createDevtoolsHandler`, `createNodeDevtoolsMiddleware`, `instrumentPg`, `instrumentMysql`, `instrumentSqlite`, `parseExplainText` |
+| `@culpritsql/devtools` | Browser / SSR / Universal | `CulpritDevtools`, `ExtendedEventsViewer`, `DeadlockViewer`, `PlanViewer`, `normalizeSqlForFingerprint`, `fingerprintSql`, `detectNPlusOneAdvice`, shared types |
+| `@culpritsql/devtools/react` | Browser / SSR | `CulpritDevtools`, `ExtendedEventsViewer`, `DeadlockViewer`, `PlanViewer`, and React prop types |
+| `@culpritsql/devtools/server` | Node.js / Bun (`>=20`) | `CulpritCollector`, `createDevtoolsHandler`, `createNodeDevtoolsMiddleware`, `instrumentPg`, `instrumentMysql`, `instrumentSqlite`, `parseExplainText`, `parseDeadlockText`, `parseExtendedEventsXmlText`, `parseXelBytes` |
 | `@culpritsql/devtools/styles.css` | CSS | Scoped `.culprit-dt` + `@culpritsql/plan-viewer` styles |
 
 ## License

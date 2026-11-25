@@ -21,7 +21,10 @@ import {
   instrumentPg,
   instrumentSqlite,
   isSafeForAutoExplain,
+  parseDeadlockText,
   parseExplainText,
+  parseExtendedEventsXmlText,
+  parseXelBytes,
 } from "../src/server.js";
 
 const SAMPLE_PG_EXPLAIN_JSON = JSON.stringify([
@@ -423,6 +426,51 @@ describe("Fetch and Node HTTP DevTools handlers and security guards", () => {
     );
     expect(badParseRes.status).toBe(400);
 
+    // POST /__culprit/parse parses SQL Server Extended Events XML and rejects XML on xelBase64
+    const xeXml = [
+      '<RingBufferTarget>',
+      '  <event name="attention" package="sqlserver" timestamp="2026-11-25T10:20:00.000Z">',
+      '    <data name="duration"><value>30000000</value></data>',
+      '    <action name="sql_text" package="sqlserver"><value>SELECT * FROM invoices WHERE secret = \'top-secret\';</value></action>',
+      '  </event>',
+      '</RingBufferTarget>',
+    ].join("\n");
+    const xeParseRes = await handler(
+      new Request("http://127.0.0.1/__culprit/parse", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ rawExplain: xeXml }),
+      }),
+    );
+    expect(xeParseRes.status).toBe(200);
+    const xeBody = (await xeParseRes.json()) as {
+      events: { format: string; records: Array<{ kind: { event: string } }> };
+    };
+    expect(xeBody.events.format).toBe("xml");
+    expect(xeBody.events.records).toHaveLength(1);
+    expect(xeBody.events.records[0]?.kind.event).toBe("attention");
+    expect(JSON.stringify(xeBody)).not.toContain("top-secret");
+
+    const xelBadRes = await handler(
+      new Request("http://127.0.0.1/__culprit/parse", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ xelBase64: Buffer.from(xeXml, "utf8").toString("base64") }),
+      }),
+    );
+    expect(xelBadRes.status).toBe(400);
+    let xelThrew = false;
+    try {
+      await parseXelBytes(new Uint8Array(Buffer.from(xeXml, "utf8")));
+    } catch {
+      xelThrew = true;
+    }
+    expect(xelThrew).toBe(true);
+    const parsedDls = await parseDeadlockText(
+      "ERROR:  deadlock detected\nDETAIL:  Process 10 waits for ShareLock on transaction 1; blocked by process 20.\nProcess 20 waits for ShareLock on transaction 2; blocked by process 10.\nProcess 10: UPDATE a SET x = 1;\nProcess 20: UPDATE b SET x = 1;",
+    );
+    expect(parsedDls).toHaveLength(1);
+
     // POST /__culprit/clear resets ring buffer
     const clearRes = await handler(
       new Request("http://127.0.0.1/__culprit/clear", { method: "POST" }),
@@ -540,6 +588,21 @@ describe("React SSR rendering, PlanViewer integration, and browser bundle isolat
     );
     expect(planHtml).toContain("culprit-pv");
     expect(planHtml).toContain("orders");
+
+    // 4. Plan Inspector tab with @culpritsql/plan-viewer <ExtendedEventsViewer />
+    const xeBatch = await parseExtendedEventsXmlText(
+      '<RingBufferTarget><event name="error_reported" package="sqlserver" timestamp="2026-11-25T10:30:00Z"><data name="error_number"><value>1205</value></data><data name="severity"><value>13</value></data><data name="state"><value>51</value></data></event></RingBufferTarget>',
+    );
+    const eventsHtml = renderToString(
+      <CulpritDevtools
+        initialSnapshot={snapshot}
+        initialInspectorPayload={{ kind: "events", events: xeBatch, label: "system_health.xel" }}
+        defaultOpen
+        defaultTab="plan"
+      />,
+    );
+    expect(eventsHtml).toContain("culprit-pv");
+    expect(eventsHtml).toContain("1205");
   });
 
   test("client entrypoints bundle for browsers without pulling Node builtins and CSS stays strictly scoped", async () => {

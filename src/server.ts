@@ -4,10 +4,19 @@ import diagnosticsChannel from "node:diagnostics_channel";
 import { readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { performance } from "node:perf_hooks";
-import { init as initPlansWasm, ParserError, parsePlan } from "@culpritsql/plans";
 import {
+  init as initPlansWasm,
+  ParserError,
+  parseDeadlock,
+  parseExtendedEventsXml,
+  parsePlan,
+  parseXel,
+} from "@culpritsql/plans";
+import {
+  type Deadlock,
   type DevtoolsSnapshot,
   type Engine,
+  type ExtendedEventsBatch,
   fingerprintSql,
   type NPlusOneBurst,
   normalizeSqlForFingerprint,
@@ -91,7 +100,10 @@ const CULPRIT_INTERNAL_TAG = "/* culprit */";
 const SINGLE_SELECT_RE = /^\s*(?:with\b[\s\S]+?select|select)\b/i;
 const MUTATING_KEYWORD_RE = /\b(?:insert|update|delete|merge|replace|upset|upsert|drop|alter|create|truncate|grant|revoke|call|exec|execute|copy|into)\b/i;
 const ALREADY_EXPLAIN_RE = /^\s*explain\b/i;
-const MAX_EXPLAIN_BODY_BYTES = 2 * 1024 * 1024;
+const MAX_EXPLAIN_BODY_BYTES = 12 * 1024 * 1024;
+const EXTENDED_EVENTS_XML_RE = /^<(?:events|RingBufferTarget|event\b)/i;
+const DEADLOCK_INPUT_RE =
+  /<deadlock(?:-list|s)?[\s>]/i;
 
 let wasmInitPromise: Promise<void> | null = null;
 
@@ -120,6 +132,30 @@ export async function ensurePlansWasm(): Promise<void> {
 export async function parseExplainText(rawExplain: string, engine?: Engine): Promise<Plan> {
   await ensurePlansWasm();
   return parsePlan(rawExplain, engine);
+}
+
+/**
+ * Parses deadlock reports (SQL Server `<deadlock>` XML, PostgreSQL logs, or InnoDB status) via Wasm.
+ */
+export async function parseDeadlockText(rawDeadlock: string): Promise<Deadlock[]> {
+  await ensurePlansWasm();
+  return parseDeadlock(rawDeadlock);
+}
+
+/**
+ * Parses exported SQL Server Extended Events XML (`<events>` or `<RingBufferTarget>`) via Wasm.
+ */
+export async function parseExtendedEventsXmlText(rawXml: string): Promise<ExtendedEventsBatch> {
+  await ensurePlansWasm();
+  return parseExtendedEventsXml(rawXml);
+}
+
+/**
+ * Parses a binary SQL Server Extended Events (`.xel`) capture buffer via Wasm.
+ */
+export async function parseXelBytes(bytes: Uint8Array): Promise<ExtendedEventsBatch> {
+  await ensurePlansWasm();
+  return parseXel(bytes);
 }
 
 function coerceEngine(raw: unknown, fallback?: Engine): Engine | undefined {
@@ -1248,16 +1284,25 @@ export function createDevtoolsHandler(
     if (req.method === "POST" && route === "/parse") {
       const rawText = await req.text();
       if (Buffer.byteLength(rawText, "utf8") > MAX_EXPLAIN_BODY_BYTES) {
-        return jsonResponse({ error: "EXPLAIN payload exceeds maximum allowed size (2 MB)." }, 413);
+        return jsonResponse({ error: "Payload exceeds maximum allowed size (12 MB)." }, 413);
       }
 
       let rawExplain = rawText;
+      let rawDeadlock: string | undefined;
+      let rawEventsXml: string | undefined;
+      let xelBase64: string | undefined;
       let engine: Engine | undefined;
       const contentType = req.headers.get("content-type") ?? "";
       if (contentType.includes("application/json") || rawText.trim().startsWith("{")) {
         try {
           const parsedBody = JSON.parse(rawText) as Record<string, unknown>;
-          if (typeof parsedBody.rawExplain === "string") {
+          if (typeof parsedBody.xelBase64 === "string") {
+            xelBase64 = parsedBody.xelBase64;
+          } else if (typeof parsedBody.rawEventsXml === "string") {
+            rawEventsXml = parsedBody.rawEventsXml;
+          } else if (typeof parsedBody.rawDeadlock === "string") {
+            rawDeadlock = parsedBody.rawDeadlock;
+          } else if (typeof parsedBody.rawExplain === "string") {
             rawExplain = parsedBody.rawExplain;
             engine = coerceEngine(parsedBody.engine);
           } else if (typeof parsedBody.explain === "string") {
@@ -1269,11 +1314,42 @@ export function createDevtoolsHandler(
         }
       }
 
-      if (!rawExplain || !rawExplain.trim()) {
-        return jsonResponse({ error: "Provide non-empty EXPLAIN output to parse." }, 400);
-      }
-
       try {
+        if (xelBase64 !== undefined) {
+          const bytes = new Uint8Array(Buffer.from(xelBase64, "base64"));
+          const events = await parseXelBytes(bytes);
+          return jsonResponse({ events });
+        }
+
+        if (rawEventsXml !== undefined) {
+          const events = await parseExtendedEventsXmlText(rawEventsXml);
+          return jsonResponse({ events });
+        }
+
+        if (rawDeadlock !== undefined) {
+          const deadlocks = await parseDeadlockText(rawDeadlock);
+          return jsonResponse({ deadlocks });
+        }
+
+        if (!rawExplain || !rawExplain.trim()) {
+          return jsonResponse({ error: "Provide non-empty EXPLAIN, deadlock, or Extended Events output to parse." }, 400);
+        }
+
+        const xmlBody = rawExplain.replace(/^\uFEFF?(?:<\?xml[^>]*\?>\s*)?/i, "").trimStart();
+        if (EXTENDED_EVENTS_XML_RE.test(xmlBody)) {
+          const events = await parseExtendedEventsXmlText(rawExplain);
+          return jsonResponse({ events });
+        }
+
+        if (
+          DEADLOCK_INPUT_RE.test(rawExplain) ||
+          /\bdeadlock detected\b/i.test(rawExplain) ||
+          /LATEST DETECTED DEADLOCK/i.test(rawExplain)
+        ) {
+          const deadlocks = await parseDeadlockText(rawExplain);
+          return jsonResponse({ deadlocks });
+        }
+
         const plan = await parseExplainText(rawExplain, engine);
         return jsonResponse({ plan });
       } catch (err) {
@@ -1288,7 +1364,7 @@ export function createDevtoolsHandler(
           );
         }
         return jsonResponse(
-          { error: err instanceof Error ? err.message : "Failed to parse EXPLAIN output." },
+          { error: err instanceof Error ? err.message : "Failed to parse diagnostic payload." },
           400,
         );
       }

@@ -1,5 +1,8 @@
 import {
+  DeadlockViewer,
+  ExtendedEventsViewer,
   PlanCanvas,
+  PlanDiffViewer,
   PlanViewer,
   type PlanViewerTheme,
   type QueryStat,
@@ -9,6 +12,7 @@ import {
   AlertTriangle,
   Database,
   FileSearch,
+  FolderOpen,
   Layers,
   Maximize2,
   Minimize2,
@@ -20,20 +24,29 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { type ChangeEvent, type DragEvent, useEffect, useMemo, useState } from "react";
 import {
+  type Deadlock,
   type DevtoolsSnapshot,
   detectNPlusOneAdvice,
   EMPTY_DEVTOOLS_SNAPSHOT,
   type Engine,
+  type ExtendedEventsBatch,
   type Plan,
   type RecordedQuery,
 } from "./shared.js";
+
+export { DeadlockViewer, ExtendedEventsViewer, PlanCanvas, PlanDiffViewer, PlanViewer };
 
 export type DevtoolsPosition = "bottom-right" | "bottom-left" | "top-right" | "top-left";
 export type DevtoolsTab = "queries" | "bursts" | "plan";
 export type QueryFilterMode = "all" | "slow" | "nplus1" | "with-plan";
 export type InspectorMode = "viewer" | "canvas";
+
+export type InspectorPayload =
+  | { kind: "plan"; plan: Plan; label?: string }
+  | { kind: "events"; events: ExtendedEventsBatch; label?: string }
+  | { kind: "deadlocks"; deadlocks: Deadlock[]; label?: string };
 
 export type CulpritDevtoolsProps = {
   /** DevTools server route prefix. Defaults to `"/__culprit"`. */
@@ -62,10 +75,43 @@ export type CulpritDevtoolsProps = {
   onTabChange?: (tab: DevtoolsTab) => void;
   /** Pre-selected query id for the Plan Inspector tab. */
   defaultSelectedQueryId?: string | null;
+  /** Pre-loaded plan, deadlock, or Extended Events batch for the Inspector tab (SSR / Storybook / offline). */
+  initialInspectorPayload?: InspectorPayload | null;
   /** Optional custom EXPLAIN parser callback for serverless / browser-only setups. */
   onParseExplain?: (rawExplain: string, engine?: Engine) => Promise<Plan> | Plan;
+  /** Optional custom binary `.xel` parser callback for serverless / browser-only setups. */
+  onParseXel?: (bytes: Uint8Array) => Promise<ExtendedEventsBatch> | ExtendedEventsBatch;
   className?: string;
 };
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return typeof btoa === "function" ? btoa(binary) : Buffer.from(bytes).toString("base64");
+}
+
+function hasXelHeader(bytes: Uint8Array): boolean {
+  return (
+    bytes.length >= 4 &&
+    bytes[0] === 0x5a &&
+    bytes[1] === 0x37 &&
+    bytes[2] === 0xab &&
+    bytes[3] === 0xef
+  );
+}
+
+function decodeUploadedText(bytes: Uint8Array): string {
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+    return new TextDecoder("utf-16le").decode(bytes);
+  }
+  if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+    return new TextDecoder("utf-16be").decode(bytes);
+  }
+  return new TextDecoder("utf-8").decode(bytes);
+}
 
 function formatDuration(ms: number): string {
   if (!Number.isFinite(ms) || ms <= 0) return "0 ms";
@@ -122,7 +168,9 @@ export function CulpritDevtools({
   tab: controlledTab,
   onTabChange,
   defaultSelectedQueryId,
+  initialInspectorPayload = null,
   onParseExplain,
+  onParseXel,
   className,
 }: CulpritDevtoolsProps) {
   const [internalSnapshot, setInternalSnapshot] = useState<DevtoolsSnapshot>(
@@ -143,7 +191,10 @@ export function CulpritDevtools({
   const [inspectorMode, setInspectorMode] = useState<InspectorMode>("viewer");
   const [pastedExplain, setPastedExplain] = useState<string>("");
   const [pasteEngine, setPasteEngine] = useState<Engine | "auto">("auto");
-  const [pastedPlan, setPastedPlan] = useState<Plan | null>(null);
+  const [pastedPayload, setPastedPayload] = useState<InspectorPayload | null>(
+    initialInspectorPayload,
+  );
+  const [deadlockIdx, setDeadlockIdx] = useState<number>(0);
   const [parseError, setParseError] = useState<string | null>(null);
   const [isParsing, setIsParsing] = useState<boolean>(false);
   const [pasteOpen, setPasteOpen] = useState<boolean>(false);
@@ -243,10 +294,13 @@ export function CulpritDevtools({
     return queriesWithPlan[0] ?? activeSnapshot.queries[0] ?? null;
   }, [activeSnapshot.queries, queriesWithPlan, selectedQueryId]);
 
-  const activePlan: Plan | null = pastedPlan ?? selectedQuery?.plan ?? null;
+  const pastedPlan = pastedPayload?.kind === "plan" ? pastedPayload.plan : null;
+  const activePlan: Plan | null = pastedPlan ?? (pastedPayload ? null : (selectedQuery?.plan ?? null));
+  const activeInspectorPayload: InspectorPayload | null =
+    pastedPayload ?? (selectedQuery?.plan ? { kind: "plan", plan: selectedQuery.plan } : null);
   const activeQueryStat = useMemo(
-    () => (pastedPlan || !selectedQuery ? null : toQueryStat(selectedQuery)),
-    [pastedPlan, selectedQuery],
+    () => (pastedPayload || !selectedQuery ? null : toQueryStat(selectedQuery)),
+    [pastedPayload, selectedQuery],
   );
 
   const hasErrors = useMemo(
@@ -269,7 +323,7 @@ export function CulpritDevtools({
         : `⚡ SQL · ${activeSnapshot.stats.totalQueries}`;
 
   const handleClear = async () => {
-    setPastedPlan(null);
+    setPastedPayload(null);
     setBurstFingerprintFilter(null);
     if (controlledSnapshot === undefined) {
       setInternalSnapshot(EMPTY_DEVTOOLS_SNAPSHOT);
@@ -282,7 +336,7 @@ export function CulpritDevtools({
   };
 
   const handleInspectQuery = async (q: RecordedQuery) => {
-    setPastedPlan(null);
+    setPastedPayload(null);
     setParseError(null);
     setSelectedQueryId(q.id);
     setTab("plan");
@@ -294,10 +348,10 @@ export function CulpritDevtools({
     }
   };
 
-  const handleParseText = async (rawText: string, engineHint?: Engine) => {
+  const handleParseText = async (rawText: string, engineHint?: Engine, customLabel?: string) => {
     const trimmed = rawText.trim();
     if (!trimmed) {
-      setParseError("Paste non-empty EXPLAIN output to inspect.");
+      setParseError("Paste non-empty EXPLAIN, deadlock, or Extended Events output to inspect.");
       return;
     }
     setIsParsing(true);
@@ -305,7 +359,7 @@ export function CulpritDevtools({
     try {
       if (onParseExplain) {
         const parsed = await onParseExplain(trimmed, engineHint);
-        setPastedPlan(parsed);
+        setPastedPayload({ kind: "plan", plan: parsed, label: customLabel });
         setPasteOpen(false);
       } else {
         const res = await fetch(`${normalizedEndpoint}/parse`, {
@@ -313,12 +367,32 @@ export function CulpritDevtools({
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ rawExplain: trimmed, engine: engineHint }),
         });
-        const data = (await res.json()) as { plan?: Plan; error?: string; hint?: string };
-        if (!res.ok || !data.plan) {
+        const data = (await res.json()) as {
+          plan?: Plan;
+          events?: ExtendedEventsBatch;
+          deadlocks?: Deadlock[];
+          error?: string;
+        };
+        if (!res.ok) {
+          setParseError(data.error ?? "Unable to parse diagnostic output.");
+          return;
+        }
+        if (data.events) {
+          setPastedPayload({ kind: "events", events: data.events, label: customLabel });
+          setPasteOpen(false);
+          return;
+        }
+        if (data.deadlocks && data.deadlocks.length > 0) {
+          setDeadlockIdx(0);
+          setPastedPayload({ kind: "deadlocks", deadlocks: data.deadlocks, label: customLabel });
+          setPasteOpen(false);
+          return;
+        }
+        if (!data.plan) {
           setParseError(data.error ?? "Unable to parse EXPLAIN output.");
           return;
         }
-        setPastedPlan(data.plan);
+        setPastedPayload({ kind: "plan", plan: data.plan, label: customLabel });
         setPasteOpen(false);
       }
     } catch (err) {
@@ -326,6 +400,65 @@ export function CulpritDevtools({
     } finally {
       setIsParsing(false);
     }
+  };
+
+  const handleParseXelFile = async (bytes: Uint8Array, fileName: string) => {
+    setIsParsing(true);
+    setParseError(null);
+    try {
+      if (onParseXel) {
+        const events = await onParseXel(bytes);
+        setPastedPayload({ kind: "events", events, label: fileName });
+        setPasteOpen(false);
+      } else {
+        const res = await fetch(`${normalizedEndpoint}/parse`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ xelBase64: bytesToBase64(bytes) }),
+        });
+        const data = (await res.json()) as { events?: ExtendedEventsBatch; error?: string };
+        if (!res.ok || !data.events) {
+          setParseError(data.error ?? "Unable to parse .xel Extended Events file.");
+          return;
+        }
+        setPastedPayload({ kind: "events", events: data.events, label: fileName });
+        setPasteOpen(false);
+      }
+    } catch (err) {
+      setParseError(err instanceof Error ? err.message : "Unable to reach DevTools /parse endpoint.");
+    } finally {
+      setIsParsing(false);
+    }
+  };
+
+  const handleInspectorFile = async (file: File) => {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (/\.xel$/i.test(file.name) || hasXelHeader(bytes)) {
+      await handleParseXelFile(bytes, file.name);
+      return;
+    }
+    const text = decodeUploadedText(bytes);
+    setPastedExplain(text);
+    await handleParseText(
+      text,
+      pasteEngine === "auto" ? undefined : pasteEngine,
+      file.name,
+    );
+  };
+
+  const handleFileInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (file) {
+      void handleInspectorFile(file);
+    }
+  };
+
+  const handlePasteBoxDrop = (e: DragEvent<HTMLDivElement>) => {
+    const file = e.dataTransfer?.files?.[0];
+    if (!file) return;
+    e.preventDefault();
+    void handleInspectorFile(file);
   };
 
   const themeAttr = theme === "system" ? undefined : theme;
@@ -629,15 +762,24 @@ export function CulpritDevtools({
                     <select
                       className="culprit-dt-select"
                       aria-label="Select recorded query plan"
-                      value={pastedPlan ? "__pasted__" : (selectedQuery?.id ?? "")}
+                      value={pastedPayload ? "__pasted__" : (selectedQuery?.id ?? "")}
                       onChange={(e) => {
                         const val = e.target.value;
                         if (val === "__pasted__") return;
-                        setPastedPlan(null);
+                        setPastedPayload(null);
                         setSelectedQueryId(val);
                       }}
                     >
-                      {pastedPlan && <option value="__pasted__">Pasted EXPLAIN plan</option>}
+                      {pastedPayload && (
+                        <option value="__pasted__">
+                          {pastedPayload.label ??
+                            (pastedPayload.kind === "events"
+                              ? "Loaded Extended Events"
+                              : pastedPayload.kind === "deadlocks"
+                                ? "Loaded Deadlock"
+                                : "Pasted EXPLAIN plan")}
+                        </option>
+                      )}
                       {queriesWithPlan.map((q) => (
                         <option key={q.id} value={q.id}>
                           {formatDuration(q.durationMs)} ·{" "}
@@ -667,23 +809,41 @@ export function CulpritDevtools({
                   )}
                 </div>
 
-                <button
-                  type="button"
-                  className={`culprit-dt-chip ${pasteOpen || !activePlan ? "is-active" : ""}`}
-                  onClick={() => setPasteOpen((v) => !v)}
-                >
-                  Paste EXPLAIN
-                </button>
+                <div className="culprit-dt-filters">
+                  <label className="culprit-dt-chip culprit-dt-file-chip">
+                    <FolderOpen size={12} aria-hidden="true" />
+                    <span>Load .xel / File</span>
+                    <input
+                      type="file"
+                      accept=".xel,.sqlplan,.xdl,.xml,.json,.txt,.log"
+                      hidden
+                      onChange={handleFileInputChange}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className={`culprit-dt-chip ${pasteOpen || !activeInspectorPayload ? "is-active" : ""}`}
+                    onClick={() => setPasteOpen((v) => !v)}
+                  >
+                    Paste EXPLAIN
+                  </button>
+                </div>
               </div>
 
-              {(pasteOpen || !activePlan) && (
-                <div className="culprit-dt-paste-box">
+              {(pasteOpen || !activeInspectorPayload) && (
+                <div
+                  className="culprit-dt-paste-box"
+                  onDragOver={(e) => {
+                    if (e.dataTransfer?.types?.includes("Files")) e.preventDefault();
+                  }}
+                  onDrop={handlePasteBoxDrop}
+                >
                   <textarea
                     className="culprit-dt-textarea"
                     rows={4}
                     value={pastedExplain}
                     onChange={(e) => setPastedExplain(e.target.value)}
-                    placeholder="Paste PostgreSQL EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON), text plan, MySQL EXPLAIN FORMAT=JSON, SQLite EXPLAIN QUERY PLAN, or SQL Server .sqlplan XML..."
+                    placeholder="Paste EXPLAIN output, SQL Server .sqlplan / <deadlock> / Extended Events XML, or drop a binary .xel file..."
                     aria-label="Raw EXPLAIN input"
                   />
                   <div className="culprit-dt-paste-footer">
@@ -720,22 +880,48 @@ export function CulpritDevtools({
                 </div>
               )}
 
-              {activePlan ? (
+              {activeInspectorPayload ? (
                 <div className="culprit-dt-viewer-stage">
-                  {inspectorMode === "viewer" ? (
+                  {activeInspectorPayload.kind === "events" ? (
+                    <ExtendedEventsViewer batch={activeInspectorPayload.events} theme={theme} />
+                  ) : activeInspectorPayload.kind === "deadlocks" ? (
+                    <div className="culprit-dt-deadlock-stage">
+                      {activeInspectorPayload.deadlocks.length > 1 && (
+                        <div className="culprit-dt-filters">
+                          {activeInspectorPayload.deadlocks.map((_, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              className={`culprit-dt-chip ${deadlockIdx === idx ? "is-active" : ""}`}
+                              onClick={() => setDeadlockIdx(idx)}
+                            >
+                              {`Cycle ${idx + 1}`}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <DeadlockViewer
+                        deadlock={
+                          activeInspectorPayload.deadlocks[deadlockIdx] ??
+                          activeInspectorPayload.deadlocks[0]!
+                        }
+                        theme={theme}
+                      />
+                    </div>
+                  ) : inspectorMode === "viewer" ? (
                     <PlanViewer
-                      plan={activePlan}
+                      plan={activeInspectorPayload.plan}
                       query={activeQueryStat}
                       theme={theme}
                       title={
-                        pastedPlan
-                          ? "Pasted Plan"
+                        pastedPayload
+                          ? (pastedPayload.label ?? "Pasted Plan")
                           : selectedQuery?.requestLabel ?? "Recorded Query Plan"
                       }
                     />
                   ) : (
                     <PlanCanvas
-                      plan={activePlan}
+                      plan={activeInspectorPayload.plan}
                       query={activeQueryStat}
                       showInsights
                       height={360}
