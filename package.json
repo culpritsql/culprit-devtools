@@ -1,6 +1,6 @@
 {
   "name": "@culpritsql/devtools",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "In-app SQL DevTools HUD, N+1 burst detector, and interactive EXPLAIN, deadlock, and Extended Events (.xel) inspector for React and Node.js.",
   "license": "MIT",
   "type": "module",
@@ -33,7 +33,7 @@
   },
   "dependencies": {
     "@culpritsql/plan-viewer": "^0.6.0",
-    "@culpritsql/plans": "^0.6.5",
+    "@culpritsql/plans": "^0.6.6",
     "lucide-react": "^1.16.0"
   },
   "peerDependencies": {
